@@ -45,6 +45,7 @@ defmodule DemoWeb.PageController do
     <div><a href="/noroute">Raise NoRouteError from a controller</a></div>
     <div><a href="/exception">Generate Exception</a></div>
     <div><a href="/exit">Generate Exit</a></div>
+    <div><a href="/splode">Splode error with breadcrumbs</a></div>
 
     <h3>Liveview</h3>
     <div><a href="/liveview/mount_error">Generate LiveView mount error</a></div>
@@ -57,7 +58,7 @@ defmodule DemoWeb.PageController do
     <div><a href="/user_upgrade">Generate a pay plan log</a></div>
     <div><a href="/extra">Generate a log with attachments</a></div>
     <div><a href="/long_extra">Generate a log with long attachment</a></div>
-
+    
     <h3>Should not generate errors</h3>
     <div><a href="/404">404 Not found</a></div>
     """)
@@ -73,6 +74,53 @@ defmodule DemoWeb.PageController do
 
   def call(_conn, :exit) do
     exit(:timeout)
+  end
+  
+  def call(_conn, :splode) do
+    defmodule MyApp.Errors do
+      use Splode, error_classes: [
+        invalid: MyApp.Errors.Invalid,
+        unknown: MyApp.Errors.Unknown
+      ],
+      unknown_error: MyApp.Errors.Unknown.Unknown
+    end
+    
+    # Error classes are splode errors with an `errors` key.
+    defmodule MyApp.Errors.Invalid do
+      use Splode.ErrorClass, class: :invalid
+    end
+    
+    # You will want to define an unknown error class,
+    # otherwise splode will use its own
+    defmodule MyApp.Errors.Unknown do
+      use Splode.ErrorClass, class: :unknown
+    end
+    
+    # This fallback exception will be used for unknown errors
+    defmodule MyApp.Errors.Unknown.Unknown do
+      use Splode.Error, class: :unknown
+    
+      # your unknown message should have an `error` key
+      def message(%{error: error}) do
+        if is_binary(error) do
+          to_string(error)
+        else
+          inspect(error)
+        end
+      end
+    end
+    
+    # Finally, you can create your own error classes
+    
+    defmodule MyApp.Errors.InvalidArgument do
+      use Splode.Error, fields: [:name, :message], class: :invalid
+    
+      def message(%{name: name, message: message}) do
+        "Invalid argument #{name}: #{message}"
+      end
+    end
+    
+    raise MyApp.Errors.InvalidArgument, bread_crumbs: ["crumb1", "crumb2"]
   end
 
   defp content(conn, content) do
@@ -237,6 +285,7 @@ defmodule DemoWeb.Router do
     get("/noroute", DemoWeb.PageController, :noroute)
     get("/exception", DemoWeb.PageController, :exception)
     get("/exit", DemoWeb.PageController, :exit)
+    get("/splode", DemoWeb.PageController, :splode)
 
     get("/new_user", DemoWeb.LogController, :new_user)
     get("/user_upgrade", DemoWeb.LogController, :user_upgrade)
@@ -247,6 +296,7 @@ defmodule DemoWeb.Router do
     live("/liveview/multi_error/raise", DemoWeb.MultiErrorLive, :raise)
     live("/liveview/multi_error/throw", DemoWeb.MultiErrorLive, :throw)
     live("/liveview/component", DemoWeb.ComponentErrorLive, :update_raise)
+    
   end
 end
 
