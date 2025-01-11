@@ -7,8 +7,8 @@ defmodule DiscoLog.Presence do
   alias DiscoLog.WebsocketClient
 
   defstruct [
-    :discord,
-    :discord_config,
+    :bot_token,
+    :discord_client,
     :presence_status,
     :registry,
     :websocket_client,
@@ -32,8 +32,8 @@ defmodule DiscoLog.Presence do
   @impl GenServer
   def init({opts, callers}) do
     state = %__MODULE__{
-      discord_config: Keyword.fetch!(opts, :discord_config),
-      discord: Keyword.fetch!(opts, :discord),
+      bot_token: Keyword.fetch!(opts, :bot_token),
+      discord_client: Keyword.fetch!(opts, :discord_client),
       presence_status: Keyword.fetch!(opts, :presence_status),
       jitter: Keyword.get_lazy(opts, :jitter, fn -> :rand.uniform() end)
     }
@@ -47,9 +47,11 @@ defmodule DiscoLog.Presence do
   # Connect to Gateway
   # https://discord.com/developers/docs/events/gateway#connecting
   @impl GenServer
-  def handle_continue(:connect, %__MODULE__{discord: discord, discord_config: config} = state) do
-    {:ok, raw_uri} = discord.get_gateway(config)
-    {:ok, uri} = URI.new(raw_uri)
+  def handle_continue(
+        :connect,
+        %__MODULE__{discord_client: discord_client} = state
+      ) do
+    uri = get_gateway(discord_client)
     {:ok, client} = WebsocketClient.connect(uri.host, uri.port, "/?v=10&encoding=json")
     {:noreply, %{state | websocket_client: client}}
   end
@@ -72,7 +74,7 @@ defmodule DiscoLog.Presence do
   def handle_continue(
         :identify,
         %__MODULE__{
-          discord_config: config,
+          bot_token: bot_token,
           websocket_client: client,
           presence_status: presence_status
         } = state
@@ -80,7 +82,7 @@ defmodule DiscoLog.Presence do
     identify_event = %{
       op: 2,
       d: %{
-        token: config.token,
+        token: bot_token,
         intents: 0,
         presence: %{
           activities: [%{type: 4, state: presence_status, name: "Name"}],
@@ -183,5 +185,13 @@ defmodule DiscoLog.Presence do
 
   defp schedule_heartbeat(schedule_in) do
     Process.send_after(self(), :heartbeat, schedule_in)
+  end
+
+  defp get_gateway(discord_client) do
+    {:ok, %{status: 200, body: %{"url" => raw_uri}}} =
+      DiscoLog.Discord.API.get_gateway(discord_client)
+
+    {:ok, uri} = URI.new(raw_uri)
+    uri
   end
 end

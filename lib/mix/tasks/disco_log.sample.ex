@@ -11,9 +11,9 @@ defmodule Mix.Tasks.DiscoLog.Sample do
     # Ensure disco_log is started
     {:ok, _} = Application.ensure_all_started(:disco_log)
 
-    Logger.info("✨ DiscoLog Hello")
-    Logger.error("🔥 DiscoLog error test")
-    Logger.info(%{id: 1, username: "Bob"})
+    # Logger.info("✨ DiscoLog Hello")
+    # Logger.error("🔥 DiscoLog error test")
+    # Logger.info(%{id: 1, username: "Bob"})
 
     try do
       raise "🚨 DiscoLog is raising an error !"
